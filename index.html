@@ -347,6 +347,120 @@
     lines.forEach((ln,i)=> ctx.fillText(ln, VW/2, VH/2 + i*48));
     ctx.textAlign='left';
   }
+
+  // ================== MOBILE ADD-ON (gestures + tutorial toasts) ==================
+  (function mobileAddOn(){
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    if (!isTouch) return;
+
+    // tiny toast system
+    const hints = [];
+    const tutorial = { start:false, jump:false, punch:false, pause:false };
+
+    function showHint(text, ms=2400){ hints.push({ text, t:ms, a:0 }); }
+    function drawToast(text, a){
+      const pad=14; ctx.save();
+      ctx.font='18px system-ui,Segoe UI,Roboto';
+      const w = ctx.measureText(text).width + pad*2;
+      const x=(VW-w)/2, y=VH-110;
+      ctx.globalAlpha = a*0.9;
+      ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(x,y,w,42);
+      ctx.strokeStyle='#ffffff55'; ctx.strokeRect(x+0.5,y+0.5,w-1,41);
+      ctx.globalAlpha = a;
+      ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.fillText(text, VW/2, y+27); ctx.textAlign='left';
+      ctx.restore();
+    }
+    function drawHints(dt){
+      for (let i=hints.length-1;i>=0;i--){
+        const h=hints[i];
+        h.a = Math.min(1, h.a + dt*6);
+        h.t -= dt*1000;
+        if (h.t < 400) h.a = Math.max(0, h.t/400);
+        drawToast(h.text, h.a);
+        if (h.t <= 0) hints.splice(i,1);
+      }
+    }
+
+    function showStartCard(){
+      if (tutorial.start) return; tutorial.start = true;
+      showHint('Phone tips: Swipe ↑ to JUMP', 3200);
+      setTimeout(()=>showHint('Double-tap to PUNCH', 3200), 1100);
+      setTimeout(()=>showHint('Tap to PAUSE / RESUME', 3200), 2200);
+      setTimeout(()=>showHint('Game Over: Swipe ↑ to RESTART', 3400), 3300);
+    }
+    showStartCard();
+
+    // show contextual hints on first spawn
+    const _push = ob.push.bind(ob);
+    ob.push = function(o){
+      const r = _push(o);
+      if ((o.type==='pit' || o.type==='rock') && !tutorial.jump){ showHint('Swipe ↑ to JUMP'); tutorial.jump=true; }
+      if (o.type==='monster' && !tutorial.punch){ showHint('Double-tap to PUNCH'); tutorial.punch=true; }
+      return r;
+    };
+
+    // show restart hint when game ends
+    const _update = update;
+    update = function(dt){
+      const wasOver = gameOver;
+      _update(dt);
+      if (!wasOver && gameOver) showHint('Swipe ↑ to RESTART', 3200);
+    };
+
+    // render hints after normal draw
+    const _draw = draw;
+    let __last = performance.now();
+    draw = function(){
+      const now = performance.now();
+      const dt = Math.min(0.033, (now - __last) / 1000); __last = now;
+      _draw();
+      drawHints(dt);
+    };
+
+    // gestures
+    let start=null, swiped=false, tapTimer=null, lastTap=0;
+    function doJump(){ input.jump=true; setTimeout(()=>input.jump=false,60); }
+    function doPunch(){ input.punch=true; setTimeout(()=>input.punch=false,80); }
+
+    canvas.addEventListener('touchstart', (e)=>{
+      if (!e.touches.length) return;
+      e.preventDefault(); swiped=false;
+      start = { x:e.touches[0].clientX, y:e.touches[0].clientY };
+    }, { passive:false });
+
+    canvas.addEventListener('touchmove', (e)=>{
+      if (!start || !e.touches.length) return;
+      const dy = e.touches[0].clientY - start.y;
+      const dx = e.touches[0].clientX - start.x;
+      if (dy < -40 && Math.abs(dy) > Math.abs(dx)) { // swipe up
+        e.preventDefault(); swiped=true; start=null;
+        if (gameOver) { reset(); return; }
+        doJump();
+      }
+    }, { passive:false });
+
+    canvas.addEventListener('touchend', ()=>{
+      if (swiped) return; // handled as swipe
+      const now = performance.now();
+      if (tapTimer){ // double tap
+        clearTimeout(tapTimer); tapTimer=null;
+        if (!gameOver) doPunch();
+        return;
+      }
+      // single tap => pause/resume (debounced)
+      tapTimer=setTimeout(()=>{
+        tapTimer=null;
+        if (!gameOver){
+          paused = !paused;
+          if (paused && !tutorial.pause){ showHint('Tap again to RESUME'); tutorial.pause=true; }
+        }
+      }, 250);
+      lastTap = now;
+    }, { passive:true });
+
+  })();
+  // ================== /MOBILE ADD-ON ==================
+
 })();
 </script>
 </body>
