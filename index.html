@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -12,456 +13,531 @@
       --accent2: #9f6cff;
       --danger: #ff6c99;
     }
-    html, body { height: 100%; margin: 0; background: radial-gradient(1200px 800px at 30% 20%, #101a35, var(--bg)); color: var(--fg); font-family: system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
-    .wrap { display: grid; place-items: center; height: 100%; gap: 12px; }
-    canvas { background: linear-gradient(#7ec8ff 0%, #bfe6ff 45%, #9bdcff 46%, #7ad2ff 52%, #6fcfff 55%, #5bc1f3 100%); border-radius: 18px; box-shadow: 0 20px 60px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.06); image-rendering: pixelated; }
-    .panel { text-align: center; opacity: .9; font-size: 14px; }
-    kbd { background: #111a; border: 1px solid #fff2; padding: 2px 6px; border-radius: 6px; box-shadow: inset 0 -1px 0 #0006; }
-    .btn { cursor: pointer; padding: 8px 12px; border-radius: 10px; border: 1px solid #fff2; background: #2234; color: var(--fg); }
-    .btn:active { transform: translateY(1px); }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      background: radial-gradient(1200px 800px at 30% 20%, #101a35, var(--bg));
+      color: var(--fg);
+      font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    .wrap {
+      display: grid;
+      place-items: center;
+      height: 100%;
+      gap: 12px;
+    }
+
+    canvas {
+      background: linear-gradient(#7ec8ff 0%, #bfe6ff 45%, #9bdcff 46%, #7ad2ff 52%, #6fcfff 55%, #5bc1f3 100%);
+      border-radius: 18px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(255, 255, 255, .06);
+      image-rendering: pixelated;
+    }
+
+    .panel {
+      text-align: center;
+      opacity: .9;
+      font-size: 14px;
+    }
+
+    kbd {
+      background: #111a;
+      border: 1px solid #fff2;
+      padding: 2px 6px;
+      border-radius: 6px;
+      box-shadow: inset 0 -1px 0 #0006;
+    }
+
+    .btn {
+      cursor: pointer;
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid #fff2;
+      background: #2234;
+      color: var(--fg);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
   </style>
 </head>
+
 <body>
   <div class="wrap">
     <canvas id="game" width="960" height="540" aria-label="2D runner game"></canvas>
     <div class="panel">
-      <strong>Controls</strong> — Move <kbd>◄</kbd>/<kbd>►</kbd>, Jump <kbd>Space</kbd>, Punch <kbd>F</kbd>, Pause <kbd>P</kbd>, Restart <kbd>R</kbd>
+      <strong>Controls</strong> — Move <kbd>◄</kbd>/<kbd>►</kbd>, Jump <kbd>Space</kbd>, Punch <kbd>F</kbd>, Pause
+      <kbd>P</kbd>, Restart <kbd>R</kbd>
       <button class="btn" id="full">Fullscreen</button>
     </div>
   </div>
+  <script type="text/javascript">
+    var Tawk_API = Tawk_API || {}, Tawk_LoadStart = new Date();
+    (function () {
+      var s1 = document.createElement("script"),
+        s0 = document.getElementsByTagName("script")[0];
+      s1.async = true;
+      s1.src = "https://embed.tawk.to/68b64dbc144231243cf8f1e3/1j441vav4";
+      s1.charset = "UTF-8";
+      s1.setAttribute("crossorigin", "*");
+      s0.parentNode.insertBefore(s1, s0);
+    })();
+  </script>
+  <script>
+    // Wait for Tawk to load, then wire up events
+    (function attachTawkHandlers() {
+      if (!window.Tawk_API) { return setTimeout(attachTawkHandlers, 200); }
+      Tawk_API.onChatMaximized = function () { if (window.__game) window.__game.pause(); };
+      Tawk_API.onChatMinimized = function () { if (window.__game) window.__game.resume(); };
+      Tawk_API.onChatHidden = function () { if (window.__game) window.__game.resume(); };
+    })();
+  </script>
 
-<script>
-(() => {
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
+  <script>
+    (() => {
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
 
-  // --- Virtual resolution (keeps game logic stable) ---
-  const VW = 960, VH = 540;
-  function fitCanvas() {
-    const scale = Math.min(window.innerWidth * 0.96 / VW, window.innerHeight * 0.8 / VH);
-    canvas.style.width = Math.max(640, VW * scale) + 'px';
-    canvas.style.height = Math.max(360, VH * scale) + 'px';
-  }
-  window.addEventListener('resize', fitCanvas); fitCanvas();
+      // --- Virtual resolution (keeps game logic stable) ---
+      const VW = 960, VH = 540;
+      function fitCanvas() {
+        const scale = Math.min(window.innerWidth * 0.96 / VW, window.innerHeight * 0.8 / VH);
+        canvas.style.width = Math.max(640, VW * scale) + 'px';
+        canvas.style.height = Math.max(360, VH * scale) + 'px';
+      }
+      window.addEventListener('resize', fitCanvas); fitCanvas();
 
-  // --- Game state ---
-  const GRAVITY = 1800; // px/s^2
-  const GROUND_Y = VH - 90;
-  const WORLD_SPEED_START = 220; // px/s
-  const WORLD_ACCEL = 6; // px/s^2
-  const PLAYER = {
-    x: 140, y: GROUND_Y - 64, w: 42, h: 64,
-    vx: 0, vy: 0,
-    facing: 1, // 1 right, -1 left
-    onGround: true,
-    punching: false,
-    punchTimer: 0,
-    invuln: 0,
-    hp: 3,
-  };
-  let worldSpeed = WORLD_SPEED_START;
-  let score = 0;
-  let time = 0;
-  let paused = false;
-  let gameOver = false;
+      // --- Game state ---
+      const GRAVITY = 1800; // px/s^2
+      const GROUND_Y = VH - 90;
+      const WORLD_SPEED_START = 220; // px/s
+      const WORLD_ACCEL = 6; // px/s^2
+      const PLAYER = {
+        x: 140, y: GROUND_Y - 64, w: 42, h: 64,
+        vx: 0, vy: 0,
+        facing: 1, // 1 right, -1 left
+        onGround: true,
+        punching: false,
+        punchTimer: 0,
+        invuln: 0,
+        hp: 3,
+      };
+      let worldSpeed = WORLD_SPEED_START;
+      let score = 0;
+      let time = 0;
+      let paused = false;
+      let gameOver = false;
 
-  const input = { left:false, right:false, jump:false, punch:false };
+      const input = { left: false, right: false, jump: false, punch: false };
 
-  // Parallax background layers (trees, hills)
-  const layers = [
-    { speed: 0.2, color: '#7ac8ff', items: [] }, // far sky puffs
-    { speed: 0.5, color: '#5aa5e8', items: [] }, // hills
-    { speed: 0.9, color: '#2b6b3b', items: [] }, // tree line
-  ];
+      // Parallax background layers (trees, hills)
+      const layers = [
+        { speed: 0.2, color: '#7ac8ff', items: [] }, // far sky puffs
+        { speed: 0.5, color: '#5aa5e8', items: [] }, // hills
+        { speed: 0.9, color: '#2b6b3b', items: [] }, // tree line
+      ];
 
-  // Obstacles and hazards
-  const ob = []; // {type:'rock'|'monster'|'pit', x, y, w, h, vx}
+      // Obstacles and hazards
+      const ob = []; // {type:'rock'|'monster'|'pit', x, y, w, h, vx}
 
-  // --- Helpers ---
-  const rnd = (a,b) => a + Math.random()*(b-a);
-  function aabb(a,b){return !(a.x+a.w < b.x || a.x > b.x+b.w || a.y+a.h < b.y || a.y > b.y+b.h)}
+      // --- Helpers ---
+      const rnd = (a, b) => a + Math.random() * (b - a);
+      function aabb(a, b) { return !(a.x + a.w < b.x || a.x > b.x + b.w || a.y + a.h < b.y || a.y > b.y + b.h) }
 
-  function reset() {
-    PLAYER.x = 140; PLAYER.y = GROUND_Y - 64; PLAYER.vx = 0; PLAYER.vy = 0;
-    PLAYER.onGround = true; PLAYER.facing = 1; PLAYER.hp = 3; PLAYER.invuln = 0;
-    worldSpeed = WORLD_SPEED_START; score = 0; time = 0; paused = false; gameOver = false;
-    layers.forEach((L,i) => { L.items.length = 0; for (let k=0;k<6;k++) L.items.push({x:rnd(0,VW),y:rnd(40, VH-220),w:rnd(40,120),h:rnd(20,80)});});
-    ob.length = 0;
-  }
-  reset();
+      function reset() {
+        PLAYER.x = 140; PLAYER.y = GROUND_Y - 64; PLAYER.vx = 0; PLAYER.vy = 0;
+        PLAYER.onGround = true; PLAYER.facing = 1; PLAYER.hp = 3; PLAYER.invuln = 0;
+        worldSpeed = WORLD_SPEED_START; score = 0; time = 0; paused = false; gameOver = false;
+        layers.forEach((L, i) => { L.items.length = 0; for (let k = 0; k < 6; k++) L.items.push({ x: rnd(0, VW), y: rnd(40, VH - 220), w: rnd(40, 120), h: rnd(20, 80) }); });
+        ob.length = 0;
+      }
+      reset();
 
-  // --- Spawners ---
-  let spawnTimer = 0;
-  function spawnObstacle(dt){
-    spawnTimer -= dt; if (spawnTimer>0) return;
-    spawnTimer = rnd(Math.max(0.6, 1.6 - worldSpeed/600), Math.max(1.1, 2.4 - worldSpeed/700));
 
-    const roll = Math.random();
-    if (roll < 0.15) { // pit (gap)
-      const w = rnd(90, 160);
-      ob.push({ type:'pit', x: VW + 50, y: GROUND_Y, w, h: 30, vx: worldSpeed });
-    } else if (roll < 0.55) { // rock/log to jump over
-      const w = rnd(40, 80), h = rnd(30, 45);
-      ob.push({ type:'rock', x: VW + 20, y: GROUND_Y - h, w, h, vx: worldSpeed });
-    } else { // monster that can be punched
-      const size = rnd(36, 54);
-      ob.push({ type:'monster', x: VW + 20, y: GROUND_Y - size, w: size, h: size, vx: worldSpeed * rnd(0.9, 1.2), hp: 1 });
-    }
-  }
+      // --- Spawners ---
+      let spawnTimer = 0;
+      function spawnObstacle(dt) {
+        spawnTimer -= dt; if (spawnTimer > 0) return;
+        spawnTimer = rnd(Math.max(0.6, 1.6 - worldSpeed / 600), Math.max(1.1, 2.4 - worldSpeed / 700));
 
-  // --- Input ---
-  const KEYS = {37:'left',39:'right',65:'left',68:'right',32:'jump',70:'punch'}; // ◄ ► / A D / Space / F
-  window.addEventListener('keydown', e=>{
-    if (e.repeat) return;
-    if (e.code==='KeyP') { paused = !paused; }
-    if (e.code==='KeyR') { reset(); }
-    const k = KEYS[e.keyCode] || KEYS[e.which]; if (!k) return;
-    if (k==='jump') input.jump = true; else if (k==='punch') input.punch = true; else input[k]=true;
-  });
-  window.addEventListener('keyup', e=>{
-    const k = KEYS[e.keyCode] || KEYS[e.which]; if (!k) return;
-    if (k==='jump') input.jump = false; else if (k==='punch') input.punch = false; else input[k]=false;
-  });
-
-  document.getElementById('full').addEventListener('click', ()=>{
-    if (document.fullscreenElement) document.exitFullscreen(); else canvas.requestFullscreen().catch(()=>{});
-  });
-
-  // --- Update ---
-  let last = performance.now();
-  function tick(now){
-    const dt = Math.min(0.033, (now - last) / 1000); last = now;
-    if (!paused && !gameOver) update(dt);
-    draw();
-    requestAnimationFrame(tick);
-  }
-  requestAnimationFrame(tick);
-
-  function update(dt){
-    time += dt; score += dt * 10; // passive score
-    worldSpeed += WORLD_ACCEL * dt;
-
-    // Player horizontal control
-    const ACCEL = 1800, MAX_VX = 260; const FRICTION = 1300;
-    if (input.left) { PLAYER.vx -= ACCEL*dt; PLAYER.facing = -1; }
-    if (input.right){ PLAYER.vx += ACCEL*dt; PLAYER.facing = 1; }
-    if (!input.left && !input.right){ // friction
-      if (PLAYER.vx>0){ PLAYER.vx = Math.max(0, PLAYER.vx - FRICTION*dt); }
-      else if (PLAYER.vx<0){ PLAYER.vx = Math.min(0, PLAYER.vx + FRICTION*dt); }
-    }
-    PLAYER.vx = Math.max(-MAX_VX, Math.min(MAX_VX, PLAYER.vx));
-
-    // Jump
-    if (input.jump && PLAYER.onGround){ PLAYER.vy = -640; PLAYER.onGround = false; }
-
-    // Gravity
-    PLAYER.vy += GRAVITY * dt;
-    PLAYER.y += PLAYER.vy * dt;
-    if (PLAYER.y + PLAYER.h >= GROUND_Y){ PLAYER.y = GROUND_Y - PLAYER.h; PLAYER.vy = 0; PLAYER.onGround = true; }
-    PLAYER.x = Math.max(40, Math.min(VW - 200, PLAYER.x + PLAYER.vx*dt));
-
-    // Punch
-    if (PLAYER.punchTimer>0) PLAYER.punchTimer -= dt;
-    if (input.punch && PLAYER.punchTimer <= 0){ PLAYER.punchTimer = 0.22; }
-    PLAYER.punching = PLAYER.punchTimer > 0.06; // slight delay for anticipation
-
-    if (PLAYER.invuln>0) PLAYER.invuln -= dt;
-
-    // Parallax layers scroll
-    layers.forEach((L,i)=>{
-      const s = worldSpeed * L.speed * dt;
-      L.items.forEach(it=>{ it.x -= s; if (it.x + it.w < -50){ it.x = VW + rnd(0, 400); it.y = rnd(60, VH-240); it.w = rnd(40,120); it.h = rnd(20,80);} });
-    });
-
-    // Obstacles
-    spawnObstacle(dt);
-    for (let i=ob.length-1;i>=0;i--){
-      const o = ob[i]; o.x -= o.vx * dt;
-
-      // Remove offscreen
-      if (o.x + o.w < -60) { ob.splice(i,1); score += 1; continue; }
-
-      // Pit: if player's feet are over pit area and near ground, fall (damage)
-      if (o.type==='pit'){
-        // Visual only; damage if player "touches" the pit area at ground height
-        if (PLAYER.onGround && PLAYER.x + PLAYER.w*0.5 > o.x && PLAYER.x + PLAYER.w*0.5 < o.x + o.w) {
-          damage(1);
-          // knock back
-          PLAYER.vx = -200; PLAYER.vy = -300; PLAYER.onGround = false;
+        const roll = Math.random();
+        if (roll < 0.15) { // pit (gap)
+          const w = rnd(90, 160);
+          ob.push({ type: 'pit', x: VW + 50, y: GROUND_Y, w, h: 30, vx: worldSpeed });
+        } else if (roll < 0.55) { // rock/log to jump over
+          const w = rnd(40, 80), h = rnd(30, 45);
+          ob.push({ type: 'rock', x: VW + 20, y: GROUND_Y - h, w, h, vx: worldSpeed });
+        } else { // monster that can be punched
+          const size = rnd(36, 54);
+          ob.push({ type: 'monster', x: VW + 20, y: GROUND_Y - size, w: size, h: size, vx: worldSpeed * rnd(0.9, 1.2), hp: 1 });
         }
-        continue;
       }
 
-      // Collisions
-      if (aabb(PLAYER, o)){
-        if (o.type==='monster'){
-          // If punching and facing toward monster, destroy it
-          const punchBox = punchHitbox();
-          if (PLAYER.punching && aabb(punchBox, o)) {
-            ob.splice(i,1); score += 15; continue;
-          } else {
-            damage(1);
-            // bounce away
-            PLAYER.vx = -PLAYER.facing * 260; PLAYER.vy = -220; PLAYER.onGround = false;
-          }
-        } else if (o.type==='rock'){
-          // treat as hazard; bump
-          damage(1); PLAYER.vx = -220; PLAYER.vy = -260; PLAYER.onGround = false;
-        }
-      } else if (o.type==='monster' && PLAYER.punching){
-        // Allow slight extended reach even without body collision
-        const punchBox = punchHitbox();
-        if (aabb(punchBox, o)) { ob.splice(i,1); score += 15; continue; }
-      }
-    }
-
-    if (PLAYER.hp <= 0) gameOver = true;
-  }
-
-  function damage(n){
-    if (PLAYER.invuln>0) return;
-    PLAYER.hp -= n; PLAYER.invuln = 1.3;
-  }
-
-  function punchHitbox(){
-    const reach = 28, h = 18; // small hitbox in front
-    const x = PLAYER.facing>0 ? (PLAYER.x + PLAYER.w) : (PLAYER.x - reach);
-    return { x, y: PLAYER.y + PLAYER.h*0.35, w: reach, h };
-  }
-
-  // --- Draw ---
-  function draw(){
-    // Sky gradient already in CSS; fill clear for pixel-perfect
-    ctx.clearRect(0,0,VW,VH);
-
-    // Distant sun
-    ctx.save();
-    const sunX = 120, sunY = 100, sunR = 60;
-    const g = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR);
-    g.addColorStop(0, 'rgba(255,255,200,0.9)');
-    g.addColorStop(1, 'rgba(255,255,200,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sunX, sunY, sunR, 0, Math.PI*2); ctx.fill();
-    ctx.restore();
-
-    // Parallax hills/trees
-    layers.forEach((L, idx)=>{
-      ctx.fillStyle = L.color;
-      L.items.forEach(it=>{
-        if (idx===1){ // hills
-          ctx.beginPath(); ctx.ellipse(it.x, VH-160, it.w*1.2, 80, 0, 0, Math.PI*2); ctx.fill();
-        } else if (idx===2){ // trees (trunks + crowns)
-          ctx.fillRect(it.x, VH-130, 10, 40);
-          ctx.beginPath(); ctx.arc(it.x+5, VH-140, 24, 0, Math.PI*2); ctx.fill();
-        } else { // clouds
-          ctx.beginPath(); ctx.ellipse(it.x, it.y, it.w, it.h, 0, 0, Math.PI*2); ctx.fill();
-        }
+      // --- Input ---
+      const KEYS = { 37: 'left', 39: 'right', 65: 'left', 68: 'right', 32: 'jump', 70: 'punch' }; // ◄ ► / A D / Space / F
+      window.addEventListener('keydown', e => {
+        if (e.repeat) return;
+        if (e.code === 'KeyP') { paused = !paused; }
+        if (e.code === 'KeyR') { reset(); }
+        const k = KEYS[e.keyCode] || KEYS[e.which]; if (!k) return;
+        if (k === 'jump') input.jump = true; else if (k === 'punch') input.punch = true; else input[k] = true;
       });
-    });
+      window.addEventListener('keyup', e => {
+        const k = KEYS[e.keyCode] || KEYS[e.which]; if (!k) return;
+        if (k === 'jump') input.jump = false; else if (k === 'punch') input.punch = false; else input[k] = false;
+      });
 
-    // Ground
-    ctx.fillStyle = '#3c8a4a'; ctx.fillRect(0, GROUND_Y, VW, VH - GROUND_Y);
-    // ground stripes
-    ctx.fillStyle = '#2a6c38'; for (let x=0;x<VW;x+=32){ ctx.fillRect((x - (time*worldSpeed*0.2)%32), GROUND_Y+26, 18, 6); }
+      document.getElementById('full').addEventListener('click', () => {
+        if (document.fullscreenElement) document.exitFullscreen(); else canvas.requestFullscreen().catch(() => { });
+      });
 
-    // Obstacles
-    ob.forEach(o=>{
-      if (o.type==='pit'){
-        ctx.fillStyle = '#222'; ctx.fillRect(o.x, GROUND_Y, o.w, o.h);
-      } else if (o.type==='rock'){
-        ctx.fillStyle = '#7b5e3a';
-        ctx.beginPath();
-        ctx.moveTo(o.x, o.y + o.h);
-        ctx.lineTo(o.x + o.w*0.2, o.y);
-        ctx.lineTo(o.x + o.w*0.8, o.y);
-        ctx.lineTo(o.x + o.w, o.y + o.h);
-        ctx.closePath();
-        ctx.fill();
-      } else if (o.type==='monster'){
-        ctx.fillStyle = '#b22'; ctx.fillRect(o.x, o.y, o.w, o.h);
-        // eyes
-        ctx.fillStyle = '#fff'; ctx.fillRect(o.x+6, o.y+8, 8, 8); ctx.fillRect(o.x+o.w-14, o.y+8, 8, 8);
-        ctx.fillStyle = '#000'; ctx.fillRect(o.x+9, o.y+11, 3, 3); ctx.fillRect(o.x+o.w-11, o.y+11, 3, 3);
-        // teeth
-        ctx.fillStyle = '#fff'; ctx.fillRect(o.x+8, o.y+o.h-14, o.w-16, 8);
+      // --- Update ---
+      let last = performance.now();
+      function tick(now) {
+        const dt = Math.min(0.033, (now - last) / 1000); last = now;
+        if (!paused && !gameOver) update(dt);
+        draw();
+        requestAnimationFrame(tick);
       }
-    });
+      requestAnimationFrame(tick);
 
-    // Player
-    const flicker = PLAYER.invuln>0 && Math.floor(PLAYER.invuln*20)%2===0;
-    if (!flicker){
-      // body
-      ctx.fillStyle = '#222'; ctx.fillRect(PLAYER.x, PLAYER.y, PLAYER.w, PLAYER.h);
-      // head
-      ctx.fillStyle = '#ffd38a'; ctx.fillRect(PLAYER.x+10, PLAYER.y-18, 22, 18);
-      // face
-      ctx.fillStyle = '#000';
-      const eyeX = PLAYER.facing>0 ? PLAYER.x+24 : PLAYER.x+12;
-      ctx.fillRect(eyeX, PLAYER.y-12, 4, 4);
-      // arms / punch
-      ctx.fillStyle = '#444';
-      ctx.fillRect(PLAYER.x+4, PLAYER.y+18, 8, 18); // back arm
-      if (PLAYER.punching){
-        const px = PLAYER.facing>0 ? PLAYER.x+PLAYER.w : PLAYER.x-16;
-        ctx.fillRect(px, PLAYER.y+22, 16, 12);
-      } else {
-        const fx = PLAYER.facing>0 ? PLAYER.x+PLAYER.w-10 : PLAYER.x-2;
-        ctx.fillRect(fx, PLAYER.y+18, 8, 18);
-      }
-      // legs
-      ctx.fillStyle = '#111'; ctx.fillRect(PLAYER.x+5, PLAYER.y+PLAYER.h-14, 12, 14); ctx.fillRect(PLAYER.x+25, PLAYER.y+PLAYER.h-14, 12, 14);
-    }
+      function update(dt) {
+        time += dt; score += dt * 10; // passive score
+        worldSpeed += WORLD_ACCEL * dt;
 
-    // HUD
-    drawHUD();
-
-    if (paused && !gameOver) overlay('PAUSED');
-    if (gameOver) overlay('GAME OVER\nPress R to restart');
-  }
-
-  function drawHUD(){
-    // Score
-    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(16, 14, 160, 36);
-    ctx.fillStyle = '#fff'; ctx.font = '20px ui-monospace,Consolas,monospace';
-    ctx.fillText('Score: ' + Math.floor(score).toString().padStart(5,'0'), 24, 38);
-
-    // Hearts
-    for (let i=0;i<3;i++) heart(200 + i*28, 34, i < PLAYER.hp ? '#ff6c99' : '#555');
-  }
-
-  function heart(cx, cy, color){
-    ctx.save(); ctx.translate(cx, cy); ctx.scale(1,1);
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(0, 8);
-    ctx.bezierCurveTo(0, -6, -16, -6, -16, 6);
-    ctx.bezierCurveTo(-16, 16, 0, 22, 0, 30);
-    ctx.bezierCurveTo(0, 22, 16, 16, 16, 6);
-    ctx.bezierCurveTo(16, -6, 0, -6, 0, 8);
-    ctx.fill(); ctx.restore();
-  }
-
-  function overlay(text){
-    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0,0,VW,VH);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 44px system-ui,Segoe UI,Roboto,Helvetica,Arial'; ctx.textAlign='center';
-    const lines = text.split('\n');
-    lines.forEach((ln,i)=> ctx.fillText(ln, VW/2, VH/2 + i*48));
-    ctx.textAlign='left';
-  }
-
-  // ================== MOBILE ADD-ON (gestures + tutorial toasts) ==================
-  (function mobileAddOn(){
-    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    if (!isTouch) return;
-
-    // tiny toast system
-    const hints = [];
-    const tutorial = { start:false, jump:false, punch:false, pause:false };
-
-    function showHint(text, ms=2400){ hints.push({ text, t:ms, a:0 }); }
-    function drawToast(text, a){
-      const pad=14; ctx.save();
-      ctx.font='18px system-ui,Segoe UI,Roboto';
-      const w = ctx.measureText(text).width + pad*2;
-      const x=(VW-w)/2, y=VH-110;
-      ctx.globalAlpha = a*0.9;
-      ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(x,y,w,42);
-      ctx.strokeStyle='#ffffff55'; ctx.strokeRect(x+0.5,y+0.5,w-1,41);
-      ctx.globalAlpha = a;
-      ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.fillText(text, VW/2, y+27); ctx.textAlign='left';
-      ctx.restore();
-    }
-    function drawHints(dt){
-      for (let i=hints.length-1;i>=0;i--){
-        const h=hints[i];
-        h.a = Math.min(1, h.a + dt*6);
-        h.t -= dt*1000;
-        if (h.t < 400) h.a = Math.max(0, h.t/400);
-        drawToast(h.text, h.a);
-        if (h.t <= 0) hints.splice(i,1);
-      }
-    }
-
-    function showStartCard(){
-      if (tutorial.start) return; tutorial.start = true;
-      showHint('Phone tips: Swipe ↑ to JUMP', 3200);
-      setTimeout(()=>showHint('Double-tap to PUNCH', 3200), 1100);
-      setTimeout(()=>showHint('Tap to PAUSE / RESUME', 3200), 2200);
-      setTimeout(()=>showHint('Game Over: Swipe ↑ to RESTART', 3400), 3300);
-    }
-    showStartCard();
-
-    // show contextual hints on first spawn
-    const _push = ob.push.bind(ob);
-    ob.push = function(o){
-      const r = _push(o);
-      if ((o.type==='pit' || o.type==='rock') && !tutorial.jump){ showHint('Swipe ↑ to JUMP'); tutorial.jump=true; }
-      if (o.type==='monster' && !tutorial.punch){ showHint('Double-tap to PUNCH'); tutorial.punch=true; }
-      return r;
-    };
-
-    // show restart hint when game ends
-    const _update = update;
-    update = function(dt){
-      const wasOver = gameOver;
-      _update(dt);
-      if (!wasOver && gameOver) showHint('Swipe ↑ to RESTART', 3200);
-    };
-
-    // render hints after normal draw
-    const _draw = draw;
-    let __last = performance.now();
-    draw = function(){
-      const now = performance.now();
-      const dt = Math.min(0.033, (now - __last) / 1000); __last = now;
-      _draw();
-      drawHints(dt);
-    };
-
-    // gestures
-    let start=null, swiped=false, tapTimer=null, lastTap=0;
-    function doJump(){ input.jump=true; setTimeout(()=>input.jump=false,60); }
-    function doPunch(){ input.punch=true; setTimeout(()=>input.punch=false,80); }
-
-    canvas.addEventListener('touchstart', (e)=>{
-      if (!e.touches.length) return;
-      e.preventDefault(); swiped=false;
-      start = { x:e.touches[0].clientX, y:e.touches[0].clientY };
-    }, { passive:false });
-
-    canvas.addEventListener('touchmove', (e)=>{
-      if (!start || !e.touches.length) return;
-      const dy = e.touches[0].clientY - start.y;
-      const dx = e.touches[0].clientX - start.x;
-      if (dy < -40 && Math.abs(dy) > Math.abs(dx)) { // swipe up
-        e.preventDefault(); swiped=true; start=null;
-        if (gameOver) { reset(); return; }
-        doJump();
-      }
-    }, { passive:false });
-
-    canvas.addEventListener('touchend', ()=>{
-      if (swiped) return; // handled as swipe
-      const now = performance.now();
-      if (tapTimer){ // double tap
-        clearTimeout(tapTimer); tapTimer=null;
-        if (!gameOver) doPunch();
-        return;
-      }
-      // single tap => pause/resume (debounced)
-      tapTimer=setTimeout(()=>{
-        tapTimer=null;
-        if (!gameOver){
-          paused = !paused;
-          if (paused && !tutorial.pause){ showHint('Tap again to RESUME'); tutorial.pause=true; }
+        // Player horizontal control
+        const ACCEL = 1800, MAX_VX = 260; const FRICTION = 1300;
+        if (input.left) { PLAYER.vx -= ACCEL * dt; PLAYER.facing = -1; }
+        if (input.right) { PLAYER.vx += ACCEL * dt; PLAYER.facing = 1; }
+        if (!input.left && !input.right) { // friction
+          if (PLAYER.vx > 0) { PLAYER.vx = Math.max(0, PLAYER.vx - FRICTION * dt); }
+          else if (PLAYER.vx < 0) { PLAYER.vx = Math.min(0, PLAYER.vx + FRICTION * dt); }
         }
-      }, 250);
-      lastTap = now;
-    }, { passive:true });
+        PLAYER.vx = Math.max(-MAX_VX, Math.min(MAX_VX, PLAYER.vx));
 
-  })();
-  // ================== /MOBILE ADD-ON ==================
+        // Jump
+        if (input.jump && PLAYER.onGround) { PLAYER.vy = -640; PLAYER.onGround = false; }
 
-})();
-</script>
+        // Gravity
+        PLAYER.vy += GRAVITY * dt;
+        PLAYER.y += PLAYER.vy * dt;
+        if (PLAYER.y + PLAYER.h >= GROUND_Y) { PLAYER.y = GROUND_Y - PLAYER.h; PLAYER.vy = 0; PLAYER.onGround = true; }
+        PLAYER.x = Math.max(40, Math.min(VW - 200, PLAYER.x + PLAYER.vx * dt));
+
+        // Punch
+        if (PLAYER.punchTimer > 0) PLAYER.punchTimer -= dt;
+        if (input.punch && PLAYER.punchTimer <= 0) { PLAYER.punchTimer = 0.22; }
+        PLAYER.punching = PLAYER.punchTimer > 0.06; // slight delay for anticipation
+
+        if (PLAYER.invuln > 0) PLAYER.invuln -= dt;
+
+        // Parallax layers scroll
+        layers.forEach((L, i) => {
+          const s = worldSpeed * L.speed * dt;
+          L.items.forEach(it => { it.x -= s; if (it.x + it.w < -50) { it.x = VW + rnd(0, 400); it.y = rnd(60, VH - 240); it.w = rnd(40, 120); it.h = rnd(20, 80); } });
+        });
+
+        // Obstacles
+        spawnObstacle(dt);
+        for (let i = ob.length - 1; i >= 0; i--) {
+          const o = ob[i]; o.x -= o.vx * dt;
+
+          // Remove offscreen
+          if (o.x + o.w < -60) { ob.splice(i, 1); score += 1; continue; }
+
+          // Pit: if player's feet are over pit area and near ground, fall (damage)
+          if (o.type === 'pit') {
+            // Visual only; damage if player "touches" the pit area at ground height
+            if (PLAYER.onGround && PLAYER.x + PLAYER.w * 0.5 > o.x && PLAYER.x + PLAYER.w * 0.5 < o.x + o.w) {
+              damage(1);
+              // knock back
+              PLAYER.vx = -200; PLAYER.vy = -300; PLAYER.onGround = false;
+            }
+            continue;
+          }
+
+          // Collisions
+          if (aabb(PLAYER, o)) {
+            if (o.type === 'monster') {
+              // If punching and facing toward monster, destroy it
+              const punchBox = punchHitbox();
+              if (PLAYER.punching && aabb(punchBox, o)) {
+                ob.splice(i, 1); score += 15; continue;
+              } else {
+                damage(1);
+                // bounce away
+                PLAYER.vx = -PLAYER.facing * 260; PLAYER.vy = -220; PLAYER.onGround = false;
+              }
+            } else if (o.type === 'rock') {
+              // treat as hazard; bump
+              damage(1); PLAYER.vx = -220; PLAYER.vy = -260; PLAYER.onGround = false;
+            }
+          } else if (o.type === 'monster' && PLAYER.punching) {
+            // Allow slight extended reach even without body collision
+            const punchBox = punchHitbox();
+            if (aabb(punchBox, o)) { ob.splice(i, 1); score += 15; continue; }
+          }
+        }
+
+        if (PLAYER.hp <= 0) gameOver = true;
+      }
+
+      function damage(n) {
+        if (PLAYER.invuln > 0) return;
+        PLAYER.hp -= n; PLAYER.invuln = 1.3;
+      }
+
+      function punchHitbox() {
+        const reach = 28, h = 18; // small hitbox in front
+        const x = PLAYER.facing > 0 ? (PLAYER.x + PLAYER.w) : (PLAYER.x - reach);
+        return { x, y: PLAYER.y + PLAYER.h * 0.35, w: reach, h };
+      }
+
+      // --- Draw ---
+      function draw() {
+        // Sky gradient already in CSS; fill clear for pixel-perfect
+        ctx.clearRect(0, 0, VW, VH);
+
+        // Distant sun
+        ctx.save();
+        const sunX = 120, sunY = 100, sunR = 60;
+        const g = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR);
+        g.addColorStop(0, 'rgba(255,255,200,0.9)');
+        g.addColorStop(1, 'rgba(255,255,200,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+
+        // Parallax hills/trees
+        layers.forEach((L, idx) => {
+          ctx.fillStyle = L.color;
+          L.items.forEach(it => {
+            if (idx === 1) { // hills
+              ctx.beginPath(); ctx.ellipse(it.x, VH - 160, it.w * 1.2, 80, 0, 0, Math.PI * 2); ctx.fill();
+            } else if (idx === 2) { // trees (trunks + crowns)
+              ctx.fillRect(it.x, VH - 130, 10, 40);
+              ctx.beginPath(); ctx.arc(it.x + 5, VH - 140, 24, 0, Math.PI * 2); ctx.fill();
+            } else { // clouds
+              ctx.beginPath(); ctx.ellipse(it.x, it.y, it.w, it.h, 0, 0, Math.PI * 2); ctx.fill();
+            }
+          });
+        });
+
+        // Ground
+        ctx.fillStyle = '#3c8a4a'; ctx.fillRect(0, GROUND_Y, VW, VH - GROUND_Y);
+        // ground stripes
+        ctx.fillStyle = '#2a6c38'; for (let x = 0; x < VW; x += 32) { ctx.fillRect((x - (time * worldSpeed * 0.2) % 32), GROUND_Y + 26, 18, 6); }
+
+        // Obstacles
+        ob.forEach(o => {
+          if (o.type === 'pit') {
+            ctx.fillStyle = '#222'; ctx.fillRect(o.x, GROUND_Y, o.w, o.h);
+          } else if (o.type === 'rock') {
+            ctx.fillStyle = '#7b5e3a';
+            ctx.beginPath();
+            ctx.moveTo(o.x, o.y + o.h);
+            ctx.lineTo(o.x + o.w * 0.2, o.y);
+            ctx.lineTo(o.x + o.w * 0.8, o.y);
+            ctx.lineTo(o.x + o.w, o.y + o.h);
+            ctx.closePath();
+            ctx.fill();
+          } else if (o.type === 'monster') {
+            ctx.fillStyle = '#b22'; ctx.fillRect(o.x, o.y, o.w, o.h);
+            // eyes
+            ctx.fillStyle = '#fff'; ctx.fillRect(o.x + 6, o.y + 8, 8, 8); ctx.fillRect(o.x + o.w - 14, o.y + 8, 8, 8);
+            ctx.fillStyle = '#000'; ctx.fillRect(o.x + 9, o.y + 11, 3, 3); ctx.fillRect(o.x + o.w - 11, o.y + 11, 3, 3);
+            // teeth
+            ctx.fillStyle = '#fff'; ctx.fillRect(o.x + 8, o.y + o.h - 14, o.w - 16, 8);
+          }
+        });
+
+        // Player
+        const flicker = PLAYER.invuln > 0 && Math.floor(PLAYER.invuln * 20) % 2 === 0;
+        if (!flicker) {
+          // body
+          ctx.fillStyle = '#222'; ctx.fillRect(PLAYER.x, PLAYER.y, PLAYER.w, PLAYER.h);
+          // head
+          ctx.fillStyle = '#ffd38a'; ctx.fillRect(PLAYER.x + 10, PLAYER.y - 18, 22, 18);
+          // face
+          ctx.fillStyle = '#000';
+          const eyeX = PLAYER.facing > 0 ? PLAYER.x + 24 : PLAYER.x + 12;
+          ctx.fillRect(eyeX, PLAYER.y - 12, 4, 4);
+          // arms / punch
+          ctx.fillStyle = '#444';
+          ctx.fillRect(PLAYER.x + 4, PLAYER.y + 18, 8, 18); // back arm
+          if (PLAYER.punching) {
+            const px = PLAYER.facing > 0 ? PLAYER.x + PLAYER.w : PLAYER.x - 16;
+            ctx.fillRect(px, PLAYER.y + 22, 16, 12);
+          } else {
+            const fx = PLAYER.facing > 0 ? PLAYER.x + PLAYER.w - 10 : PLAYER.x - 2;
+            ctx.fillRect(fx, PLAYER.y + 18, 8, 18);
+          }
+          // legs
+          ctx.fillStyle = '#111'; ctx.fillRect(PLAYER.x + 5, PLAYER.y + PLAYER.h - 14, 12, 14); ctx.fillRect(PLAYER.x + 25, PLAYER.y + PLAYER.h - 14, 12, 14);
+        }
+
+        // HUD
+        drawHUD();
+
+        if (paused && !gameOver) overlay('PAUSED');
+        if (gameOver) overlay('GAME OVER\nPress R to restart');
+      }
+
+      function drawHUD() {
+        // Score
+        ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(16, 14, 160, 36);
+        ctx.fillStyle = '#fff'; ctx.font = '20px ui-monospace,Consolas,monospace';
+        ctx.fillText('Score: ' + Math.floor(score).toString().padStart(5, '0'), 24, 38);
+
+        // Hearts
+        for (let i = 0; i < 3; i++) heart(200 + i * 28, 34, i < PLAYER.hp ? '#ff6c99' : '#555');
+      }
+
+      function heart(cx, cy, color) {
+        ctx.save(); ctx.translate(cx, cy); ctx.scale(1, 1);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(0, 8);
+        ctx.bezierCurveTo(0, -6, -16, -6, -16, 6);
+        ctx.bezierCurveTo(-16, 16, 0, 22, 0, 30);
+        ctx.bezierCurveTo(0, 22, 16, 16, 16, 6);
+        ctx.bezierCurveTo(16, -6, 0, -6, 0, 8);
+        ctx.fill(); ctx.restore();
+      }
+
+      function overlay(text) {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, VW, VH);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 44px system-ui,Segoe UI,Roboto,Helvetica,Arial'; ctx.textAlign = 'center';
+        const lines = text.split('\n');
+        lines.forEach((ln, i) => ctx.fillText(ln, VW / 2, VH / 2 + i * 48));
+        ctx.textAlign = 'left';
+      }
+
+      // ================== MOBILE ADD-ON (gestures + tutorial toasts) ==================
+      (function mobileAddOn() {
+        const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        if (!isTouch) return;
+
+        // tiny toast system
+        const hints = [];
+        const tutorial = { start: false, jump: false, punch: false, pause: false };
+
+        function showHint(text, ms = 2400) { hints.push({ text, t: ms, a: 0 }); }
+        function drawToast(text, a) {
+          const pad = 14; ctx.save();
+          ctx.font = '18px system-ui,Segoe UI,Roboto';
+          const w = ctx.measureText(text).width + pad * 2;
+          const x = (VW - w) / 2, y = VH - 110;
+          ctx.globalAlpha = a * 0.9;
+          ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(x, y, w, 42);
+          ctx.strokeStyle = '#ffffff55'; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, 41);
+          ctx.globalAlpha = a;
+          ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(text, VW / 2, y + 27); ctx.textAlign = 'left';
+          ctx.restore();
+        }
+        function drawHints(dt) {
+          for (let i = hints.length - 1; i >= 0; i--) {
+            const h = hints[i];
+            h.a = Math.min(1, h.a + dt * 6);
+            h.t -= dt * 1000;
+            if (h.t < 400) h.a = Math.max(0, h.t / 400);
+            drawToast(h.text, h.a);
+            if (h.t <= 0) hints.splice(i, 1);
+          }
+        }
+
+        function showStartCard() {
+          if (tutorial.start) return; tutorial.start = true;
+          showHint('Phone tips: Swipe ↑ to JUMP', 3200);
+          setTimeout(() => showHint('Double-tap to PUNCH', 3200), 1100);
+          setTimeout(() => showHint('Tap to PAUSE / RESUME', 3200), 2200);
+          setTimeout(() => showHint('Game Over: Swipe ↑ to RESTART', 3400), 3300);
+        }
+        showStartCard();
+
+        // show contextual hints on first spawn
+        const _push = ob.push.bind(ob);
+        ob.push = function (o) {
+          const r = _push(o);
+          if ((o.type === 'pit' || o.type === 'rock') && !tutorial.jump) { showHint('Swipe ↑ to JUMP'); tutorial.jump = true; }
+          if (o.type === 'monster' && !tutorial.punch) { showHint('Double-tap to PUNCH'); tutorial.punch = true; }
+          return r;
+        };
+
+        // show restart hint when game ends
+        const _update = update;
+        update = function (dt) {
+          const wasOver = gameOver;
+          _update(dt);
+          if (!wasOver && gameOver) showHint('Swipe ↑ to RESTART', 3200);
+        };
+
+        // render hints after normal draw
+        const _draw = draw;
+        let __last = performance.now();
+        draw = function () {
+          const now = performance.now();
+          const dt = Math.min(0.033, (now - __last) / 1000); __last = now;
+          _draw();
+          drawHints(dt);
+        };
+
+        // gestures
+        let start = null, swiped = false, tapTimer = null, lastTap = 0;
+        function doJump() { input.jump = true; setTimeout(() => input.jump = false, 60); }
+        function doPunch() { input.punch = true; setTimeout(() => input.punch = false, 80); }
+
+        canvas.addEventListener('touchstart', (e) => {
+          if (!e.touches.length) return;
+          e.preventDefault(); swiped = false;
+          start = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+          if (!start || !e.touches.length) return;
+          const dy = e.touches[0].clientY - start.y;
+          const dx = e.touches[0].clientX - start.x;
+          if (dy < -40 && Math.abs(dy) > Math.abs(dx)) { // swipe up
+            e.preventDefault(); swiped = true; start = null;
+            if (gameOver) { reset(); return; }
+            doJump();
+          }
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', () => {
+          if (swiped) return; // handled as swipe
+          const now = performance.now();
+          if (tapTimer) { // double tap
+            clearTimeout(tapTimer); tapTimer = null;
+            if (!gameOver) doPunch();
+            return;
+          }
+          // single tap => pause/resume (debounced)
+          tapTimer = setTimeout(() => {
+            tapTimer = null;
+            if (!gameOver) {
+              paused = !paused;
+              if (paused && !tutorial.pause) { showHint('Tap again to RESUME'); tutorial.pause = true; }
+            }
+          }, 250);
+          lastTap = now;
+        }, { passive: true });
+        // expose tiny control so outside scripts (like Tawk) can pause/resume
+        window.__game = {
+          pause: () => { paused = true; },
+          resume: () => { if (!gameOver) paused = false; },
+          toggle: () => { paused = !paused; }
+        };
+
+
+      })();
+      // ================== /MOBILE ADD-ON ==================
+
+    })();
+  </script>
 </body>
+
 </html>
